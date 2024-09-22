@@ -81,14 +81,15 @@ static FieldType ruby_to_field_type(VALUE type_value) {
     } else if (RB_TYPE_P(type_value, T_STRING)) {
         type_id = rb_intern(StringValueCStr(type_value));
     } else {
-        rb_raise(rb_eTypeError, "Field type must be a symbol or string");
+        rb_raise(rb_eTypeError, "Field type must be a symbol or string, got %s", rb_obj_classname(type_value));
     }
 
     if (type_id == rb_intern("uint32")) return TYPE_UINT32;
     if (type_id == rb_intern("int32")) return TYPE_INT32;
     if (type_id == rb_intern("float")) return TYPE_FLOAT;
     if (type_id == rb_intern("string")) return TYPE_STRING;
-    rb_raise(rb_eArgError, "Invalid field type");
+
+    rb_raise(rb_eArgError, "Invalid field type: %s", rb_id2name(type_id));
 }
 
 static VALUE dbc_initialize(VALUE self, VALUE filepath, VALUE field_definitions) {
@@ -125,19 +126,37 @@ static VALUE dbc_read(VALUE self) {
     }
 
     dbc->records = ALLOC_N(FieldValue *, dbc->header.record_count);
-    VALUE field_names = rb_funcall(dbc->field_definitions, rb_intern("keys"), 0);
+    VALUE field_definitions = rb_iv_get(self, "@field_definitions");
+    VALUE field_names = rb_funcall(field_definitions, rb_intern("keys"), 0);
 
     for (uint32_t i = 0; i < dbc->header.record_count; i++) {
         dbc->records[i] = ALLOC_N(FieldValue, dbc->header.field_count);
         for (uint32_t j = 0; j < dbc->header.field_count; j++) {
             VALUE field_name = rb_ary_entry(field_names, j);
-            VALUE field_type = rb_hash_aref(dbc->field_definitions, field_name);
-            FieldType type = ruby_to_field_type(field_type);
+            VALUE field_type = rb_hash_aref(field_definitions, field_name);
+
+            FieldType type;
+            if (NIL_P(field_type)) {
+                type = TYPE_UINT32;  // Default to UINT32 if type is nil
+            } else {
+                type = ruby_to_field_type(field_type);
+            }
             dbc->records[i][j].type = type;
 
             if (fread(&dbc->records[i][j].value, sizeof(uint32_t), 1, file) != 1) {
                 fclose(file);
                 rb_raise(rb_eIOError, "Failed to read DBC record field");
+            }
+
+            switch (type) {
+                case TYPE_UINT32:
+                    break;
+                case TYPE_INT32:
+                    break;
+                case TYPE_FLOAT:
+                    break;
+                case TYPE_STRING:
+                    break;
             }
         }
     }
@@ -153,6 +172,7 @@ static VALUE dbc_read(VALUE self) {
     }
 
     fclose(file);
+
     return self;
 }
 
@@ -235,7 +255,7 @@ static VALUE dbc_create_record(VALUE self) {
     return INT2FIX(new_count - 1);
 }
 
-static VALUE dbc_update_record(VALUE self, VALUE index, VALUE field_name, VALUE value) {
+static VALUE dbc_update_record(VALUE self, VALUE index, VALUE field, VALUE value) {
     DBCFile *dbc;
     TypedData_Get_Struct(self, DBCFile, &dbc_data_type, dbc);
 
@@ -244,7 +264,7 @@ static VALUE dbc_update_record(VALUE self, VALUE index, VALUE field_name, VALUE 
 
     VALUE field_names = rb_funcall(dbc->field_definitions, rb_intern("keys"), 0);
     for (long i = 0; i < RARRAY_LEN(field_names); i++) {
-        if (rb_eql(rb_ary_entry(field_names, i), field_name)) {
+        if (rb_eql(rb_ary_entry(field_names, i), field)) {
             field_idx = i;
             break;
         }
@@ -254,9 +274,24 @@ static VALUE dbc_update_record(VALUE self, VALUE index, VALUE field_name, VALUE 
         rb_raise(rb_eArgError, "Invalid record or field index");
     }
 
-    VALUE field_type = rb_hash_aref(dbc->field_definitions, field_name);
+    VALUE field_type = rb_hash_aref(dbc->field_definitions, field);
     FieldType type = ruby_to_field_type(field_type);
-    ruby_to_field_value(value, type, &dbc->records[idx][field_idx]);
+
+    if (type == TYPE_STRING) {
+        // For string fields, we need to update the string block
+        char *str = StringValueCStr(value);
+        uint32_t offset = dbc->header.string_block_size;
+        uint32_t str_len = strlen(str) + 1;
+
+        dbc->string_block = realloc(dbc->string_block, dbc->header.string_block_size + str_len);
+        memcpy(dbc->string_block + offset, str, str_len);
+        dbc->header.string_block_size += str_len;
+
+        dbc->records[idx][field_idx].type = TYPE_STRING;
+        dbc->records[idx][field_idx].value.string_offset = offset;
+    } else {
+        ruby_to_field_value(value, type, &dbc->records[idx][field_idx]);
+    }
 
     return Qnil;
 }
@@ -430,6 +465,15 @@ static VALUE dbc_create_record_with_values(VALUE self, VALUE values) {
         rb_raise(rb_eArgError, "Values must be a hash");
     }
 
+    // Check for invalid field names
+    VALUE keys = rb_funcall(values, rb_intern("keys"), 0);
+    for (long i = 0; i < RARRAY_LEN(keys); i++) {
+        VALUE key = rb_ary_entry(keys, i);
+        if (NIL_P(rb_hash_aref(dbc->field_definitions, key))) {
+            rb_raise(rb_eArgError, "Invalid field name: %"PRIsVALUE, key);
+        }
+    }
+
     uint32_t new_count = dbc->header.record_count + 1;
     REALLOC_N(dbc->records, FieldValue *, new_count);
     dbc->records[new_count - 1] = ALLOC_N(FieldValue, dbc->header.field_count);
@@ -438,14 +482,40 @@ static VALUE dbc_create_record_with_values(VALUE self, VALUE values) {
     for (uint32_t i = 0; i < dbc->header.field_count; i++) {
         VALUE field_name = rb_ary_entry(field_names, i);
         VALUE value = rb_hash_aref(values, field_name);
-
-        if (NIL_P(value)) {
-            rb_raise(rb_eArgError, "Missing value for field: %"PRIsVALUE, field_name);
-        }
-
         VALUE field_type = rb_hash_aref(dbc->field_definitions, field_name);
         FieldType type = ruby_to_field_type(field_type);
-        ruby_to_field_value(value, type, &dbc->records[new_count - 1][i]);
+
+        if (NIL_P(value)) {
+            // Set default values for missing fields
+            switch (type) {
+                case TYPE_UINT32:
+                case TYPE_INT32:
+                    dbc->records[new_count - 1][i].value.uint32_value = 0;
+                    break;
+                case TYPE_FLOAT:
+                    dbc->records[new_count - 1][i].value.float_value = 0.0f;
+                    break;
+                case TYPE_STRING:
+                    dbc->records[new_count - 1][i].value.string_offset = 0; // Empty string
+                    break;
+            }
+        } else {
+            if (type == TYPE_STRING) {
+                char *str = StringValueCStr(value);
+                uint32_t offset = dbc->header.string_block_size;
+                uint32_t str_len = strlen(str) + 1;
+
+                dbc->string_block = realloc(dbc->string_block, dbc->header.string_block_size + str_len);
+                memcpy(dbc->string_block + offset, str, str_len);
+                dbc->header.string_block_size += str_len;
+
+                dbc->records[new_count - 1][i].type = TYPE_STRING;
+                dbc->records[new_count - 1][i].value.string_offset = offset;
+            } else {
+                ruby_to_field_value(value, type, &dbc->records[new_count - 1][i]);
+            }
+        }
+        dbc->records[new_count - 1][i].type = type;
     }
 
     dbc->header.record_count = new_count;
