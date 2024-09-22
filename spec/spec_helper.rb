@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require 'wow_dbc'
+require 'fileutils'
+require 'pry'
 
 RSpec.configure do |config|
   # Enable flags like --only-failures and --next-failure

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-RSpec.describe WowDbc do
+RSpec.describe WowDBC do
   it 'has a version number' do
-    expect(WowDbc::VERSION).not_to be nil
+    expect(WowDBC::VERSION).not_to be nil
   end
 end

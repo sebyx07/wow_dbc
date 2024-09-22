@@ -9,6 +9,6 @@
 
 # rspec failure tracking
 .rspec_status
-lib/stormlib/stormlib.so
+lib/wow_dbc/wow_dbc.so
 .idea/
 *.gem

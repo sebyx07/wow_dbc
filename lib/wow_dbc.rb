@@ -1,8 +1,12 @@
 # frozen_string_literal: true
 
-require_relative 'wow_dbc/version'
+# File: lib/wow_dbc.rb
 
-module WowDbc
-  class Error < StandardError; end
-  # Your code goes here...
+require 'wow_dbc/wow_dbc'
+require 'wow_dbc/version'
+
+module WowDBC
+  class DBCFile
+    # All functionality is implemented in C
+  end
 end
