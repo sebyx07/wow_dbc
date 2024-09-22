@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    wow_dbc (1.0.0)
+    wow_dbc (1.0.2)
 
 GEM
   remote: https://rubygems.org/
