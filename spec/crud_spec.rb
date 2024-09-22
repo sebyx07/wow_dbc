@@ -64,6 +64,44 @@ RSpec.describe WowDBC::DBCFile do
       new_dbc_file.read
       expect(new_dbc_file.get_record(0)[:class]).to eq(new_value)
     end
+
+    it 'creates a new record with initial values' do
+      initial_values = { id: 1000, class: 2, subclass: 3 }
+      new_record_index = dbc_file.create_record_with_values(initial_values)
+      new_record = dbc_file.get_record(new_record_index)
+
+      expect(new_record[:id]).to eq(1000)
+      expect(new_record[:class]).to eq(2)
+      expect(new_record[:subclass]).to eq(3)
+    end
+
+    it 'updates multiple fields of a record at once' do
+      original_record = dbc_file.get_record(0)
+      updates = { class: 5, subclass: 6, material: 7 }
+      dbc_file.update_record_multi(0, updates)
+      updated_record = dbc_file.get_record(0)
+
+      expect(updated_record[:class]).to eq(5)
+      expect(updated_record[:subclass]).to eq(6)
+      expect(updated_record[:material]).to eq(7)
+      expect(updated_record[:id]).to eq(original_record[:id])  # Ensure other fields remain unchanged
+    end
+
+    it 'creates a record with initial values and then updates multiple fields' do
+      initial_values = { id: 2000, class: 3, subclass: 4 }
+      new_record_index = dbc_file.create_record_with_values(initial_values)
+
+      updates = { class: 8, material: 9, inventory_type: 10 }
+      dbc_file.update_record_multi(new_record_index, updates)
+
+      updated_record = dbc_file.get_record(new_record_index)
+
+      expect(updated_record[:id]).to eq(2000)
+      expect(updated_record[:class]).to eq(8)
+      expect(updated_record[:subclass]).to eq(4)
+      expect(updated_record[:material]).to eq(9)
+      expect(updated_record[:inventory_type]).to eq(10)
+    end
   end
 
   describe 'error handling' do
@@ -90,6 +128,22 @@ RSpec.describe WowDBC::DBCFile do
     it 'raises an error when trying to delete a non-existent record' do
       expect { dbc_file.delete_record(-1) }.to raise_error(ArgumentError)
       expect { dbc_file.delete_record(999999) }.to raise_error(ArgumentError)
+    end
+
+    it 'raises an error when trying to create a record with invalid field names' do
+      invalid_values = { id: 3000, invalid_field: 5 }
+      expect { dbc_file.create_record_with_values(invalid_values) }.to raise_error(ArgumentError)
+    end
+
+    it 'raises an error when trying to update multiple fields with invalid field names' do
+      invalid_updates = { class: 7, invalid_field: 8 }
+      expect { dbc_file.update_record_multi(0, invalid_updates) }.to raise_error(ArgumentError)
+    end
+
+    it 'raises an error when trying to update multiple fields of a non-existent record' do
+      updates = { class: 9, subclass: 10 }
+      expect { dbc_file.update_record_multi(-1, updates) }.to raise_error(ArgumentError)
+      expect { dbc_file.update_record_multi(999999, updates) }.to raise_error(ArgumentError)
     end
   end
 end

@@ -233,6 +233,83 @@ static VALUE dbc_get_header(VALUE self) {
     return header;
 }
 
+static VALUE dbc_create_record_with_values(VALUE self, VALUE initial_values) {
+    DBCFile *dbc;
+    TypedData_Get_Struct(self, DBCFile, &dbc_data_type, dbc);
+
+    uint32_t new_count = dbc->header.record_count + 1;
+    REALLOC_N(dbc->records, uint32_t *, new_count);
+    dbc->records[new_count - 1] = ALLOC_N(uint32_t, dbc->header.field_count);
+    memset(dbc->records[new_count - 1], 0, dbc->header.field_count * sizeof(uint32_t));
+
+    // Set initial values
+    if (RB_TYPE_P(initial_values, T_HASH)) {
+        VALUE keys = rb_funcall(initial_values, rb_intern("keys"), 0);
+        for (long i = 0; i < RARRAY_LEN(keys); i++) {
+            VALUE key = rb_ary_entry(keys, i);
+            VALUE value = rb_hash_aref(initial_values, key);
+            long field_idx = -1;
+
+            for (long j = 0; j < RARRAY_LEN(dbc->field_names); j++) {
+                if (rb_eql(rb_ary_entry(dbc->field_names, j), key)) {
+                    field_idx = j;
+                    break;
+                }
+            }
+
+            if (field_idx >= 0 && (uint32_t)field_idx < dbc->header.field_count) {
+                dbc->records[new_count - 1][field_idx] = NUM2UINT(value);
+            } else {
+                // Free the allocated memory before raising the error
+                free(dbc->records[new_count - 1]);
+                REALLOC_N(dbc->records, uint32_t *, dbc->header.record_count);
+                rb_raise(rb_eArgError, "Invalid field name: %s", rb_id2name(SYM2ID(key)));
+            }
+        }
+    }
+
+    dbc->header.record_count = new_count;
+
+    return INT2FIX(new_count - 1);
+}
+
+static VALUE dbc_update_record_multi(VALUE self, VALUE index, VALUE updates) {
+    DBCFile *dbc;
+    TypedData_Get_Struct(self, DBCFile, &dbc_data_type, dbc);
+
+    long idx = FIX2LONG(index);
+
+    if (idx < 0 || (uint32_t)idx >= dbc->header.record_count) {
+        rb_raise(rb_eArgError, "Invalid record index");
+    }
+
+    if (RB_TYPE_P(updates, T_HASH)) {
+        VALUE keys = rb_funcall(updates, rb_intern("keys"), 0);
+        for (long i = 0; i < RARRAY_LEN(keys); i++) {
+            VALUE key = rb_ary_entry(keys, i);
+            VALUE value = rb_hash_aref(updates, key);
+            long field_idx = -1;
+
+            for (long j = 0; j < RARRAY_LEN(dbc->field_names); j++) {
+                if (rb_eql(rb_ary_entry(dbc->field_names, j), key)) {
+                    field_idx = j;
+                    break;
+                }
+            }
+
+            if (field_idx >= 0 && (uint32_t)field_idx < dbc->header.field_count) {
+                dbc->records[idx][field_idx] = NUM2UINT(value);
+            } else {
+                rb_raise(rb_eArgError, "Invalid field name: %s", rb_id2name(SYM2ID(key)));
+            }
+        }
+    } else {
+        rb_raise(rb_eArgError, "Updates must be a hash");
+    }
+
+    return Qnil;
+}
+
 void Init_wow_dbc(void) {
     rb_mWowDBC = rb_define_module("WowDBC");
     rb_cDBCFile = rb_define_class_under(rb_mWowDBC, "DBCFile", rb_cObject);
@@ -241,7 +318,9 @@ void Init_wow_dbc(void) {
     rb_define_method(rb_cDBCFile, "read", dbc_read, 0);
     rb_define_method(rb_cDBCFile, "write", dbc_write, 0);
     rb_define_method(rb_cDBCFile, "create_record", dbc_create_record, 0);
+    rb_define_method(rb_cDBCFile, "create_record_with_values", dbc_create_record_with_values, 1);
     rb_define_method(rb_cDBCFile, "update_record", dbc_update_record, 3);
+    rb_define_method(rb_cDBCFile, "update_record_multi", dbc_update_record_multi, 2);
     rb_define_method(rb_cDBCFile, "delete_record", dbc_delete_record, 1);
     rb_define_method(rb_cDBCFile, "get_record", dbc_get_record, 1);
     rb_define_method(rb_cDBCFile, "header", dbc_get_header, 0);
