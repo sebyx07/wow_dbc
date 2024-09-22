@@ -37,7 +37,16 @@ Here's a quick example of how to use WowDBC:
 require 'wow_dbc'
 
 # Correct field names for the Item.dbc file
-field_names = [:id, :class, :subclass, :sound_override_subclass, :material, :displayid, :inventory_type, :sheath_type]
+field_names = {
+  id: :uint32,
+  class: :uint32,
+  subclass: :uint32,
+  sound_override_subclass: :int32,
+  material: :uint32,
+  displayid: :uint32,
+  inventory_type: :uint32,
+  sheath_type: :uint32
+}
 
 # Open the Item.dbc file
 dbc = WowDBC::DBCFile.new('path/to/your/Item.dbc', field_names)
