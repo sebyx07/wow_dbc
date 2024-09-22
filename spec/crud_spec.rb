@@ -1,12 +1,21 @@
 # frozen_string_literal: true
 
-# File: spec/wow_dbc/crud_spec.rb
-
 RSpec.describe WowDBC::DBCFile do
   let(:original_file) { File.join(File.dirname(__FILE__), 'resources', 'Item.dbc') }
   let(:test_file) { File.join(File.dirname(__FILE__), 'resources', 'Item_test.dbc') }
   let(:new_file) { File.join(File.dirname(__FILE__), 'resources', 'Item_new.dbc') }
-  let(:field_names) { [:id, :class, :subclass, :sound_override_subclass, :material, :displayid, :inventory_type, :sheath_type] }
+  let(:field_definitions) do
+    {
+      id: :uint32,
+      class: :uint32,
+      subclass: :uint32,
+      sound_override_subclass: :int32,
+      material: :uint32,
+      displayid: :uint32,
+      inventory_type: :uint32,
+      sheath_type: :uint32
+    }
+  end
 
   before(:each) do
     FileUtils.cp(original_file, test_file)
@@ -18,7 +27,7 @@ RSpec.describe WowDBC::DBCFile do
   end
 
   describe 'CRUD operations' do
-    let(:dbc_file) { WowDBC::DBCFile.new(test_file, field_names) }
+    let(:dbc_file) { WowDBC::DBCFile.new(test_file, field_definitions) }
 
     before(:each) do
       dbc_file.read
@@ -39,7 +48,7 @@ RSpec.describe WowDBC::DBCFile do
     it 'reads a record' do
       record = dbc_file.get_record(0)
       expect(record).to be_a(Hash)
-      expect(record.keys).to match_array(field_names)
+      expect(record.keys).to match_array(field_definitions.keys)
     end
 
     it 'updates a record' do
@@ -62,19 +71,28 @@ RSpec.describe WowDBC::DBCFile do
       dbc_file.write
 
       # Read the file again to verify changes
-      new_dbc_file = WowDBC::DBCFile.new(test_file, field_names)
+      new_dbc_file = WowDBC::DBCFile.new(test_file, field_definitions)
       new_dbc_file.read
       expect(new_dbc_file.get_record(0)[:class]).to eq(new_value)
     end
 
     it 'creates a new record with initial values' do
-      initial_values = { id: 1000, class: 2, subclass: 3 }
+      initial_values = {
+        id: 1000,
+        class: 2,
+        subclass: 3,
+        sound_override_subclass: -1,
+        material: 4,
+        displayid: 5,
+        inventory_type: 6,
+        sheath_type: 7
+      }
       new_record_index = dbc_file.create_record_with_values(initial_values)
       new_record = dbc_file.get_record(new_record_index)
 
-      expect(new_record[:id]).to eq(1000)
-      expect(new_record[:class]).to eq(2)
-      expect(new_record[:subclass]).to eq(3)
+      initial_values.each do |key, value|
+        expect(new_record[key]).to eq(value)
+      end
     end
 
     it 'updates multiple fields of a record at once' do
@@ -90,7 +108,16 @@ RSpec.describe WowDBC::DBCFile do
     end
 
     it 'creates a record with initial values and then updates multiple fields' do
-      initial_values = { id: 2000, class: 3, subclass: 4 }
+      initial_values = {
+        id: 2000,
+        class: 3,
+        subclass: 4,
+        sound_override_subclass: -1,
+        material: 5,
+        displayid: 6,
+        inventory_type: 7,
+        sheath_type: 8
+      }
       new_record_index = dbc_file.create_record_with_values(initial_values)
 
       updates = { class: 8, material: 9, inventory_type: 10 }
@@ -101,8 +128,11 @@ RSpec.describe WowDBC::DBCFile do
       expect(updated_record[:id]).to eq(2000)
       expect(updated_record[:class]).to eq(8)
       expect(updated_record[:subclass]).to eq(4)
+      expect(updated_record[:sound_override_subclass]).to eq(-1)
       expect(updated_record[:material]).to eq(9)
+      expect(updated_record[:displayid]).to eq(6)
       expect(updated_record[:inventory_type]).to eq(10)
+      expect(updated_record[:sheath_type]).to eq(8)
     end
 
     it 'finds a record by id' do
@@ -130,7 +160,7 @@ RSpec.describe WowDBC::DBCFile do
   end
 
   describe '#write_to' do
-    let(:dbc_file) { WowDBC::DBCFile.new(test_file, field_names) }
+    let(:dbc_file) { WowDBC::DBCFile.new(test_file, field_definitions) }
 
     before(:each) do
       dbc_file.read
@@ -157,11 +187,11 @@ RSpec.describe WowDBC::DBCFile do
       dbc_file.update_record(0, :class, new_value)
       dbc_file.write_to(new_file)
 
-      new_dbc_file = WowDBC::DBCFile.new(new_file, field_names)
+      new_dbc_file = WowDBC::DBCFile.new(new_file, field_definitions)
       new_dbc_file.read
       expect(new_dbc_file.get_record(0)[:class]).to eq(new_value)
 
-      original_dbc_file = WowDBC::DBCFile.new(test_file, field_names)
+      original_dbc_file = WowDBC::DBCFile.new(test_file, field_definitions)
       original_dbc_file.read
       expect(original_dbc_file.get_record(0)[:class]).not_to eq(new_value)
     end
@@ -184,7 +214,7 @@ RSpec.describe WowDBC::DBCFile do
   end
 
   describe 'error handling' do
-    let(:dbc_file) { WowDBC::DBCFile.new(test_file, field_names) }
+    let(:dbc_file) { WowDBC::DBCFile.new(test_file, field_definitions) }
 
     before(:each) do
       dbc_file.read
