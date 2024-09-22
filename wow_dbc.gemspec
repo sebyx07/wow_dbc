@@ -38,4 +38,6 @@ Gem::Specification.new do |spec|
   spec.require_paths = ['lib']
 
   spec.extensions = ['ext/wow_dbc/extconf.rb']
+
+  spec.add_development_dependency 'rake-compiler', '>= 1.2.7'
 end

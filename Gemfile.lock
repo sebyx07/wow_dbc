@@ -44,6 +44,8 @@ GEM
     rack (3.1.7)
     rainbow (3.1.1)
     rake (13.2.1)
+    rake-compiler (1.2.7)
+      rake
     regexp_parser (2.9.2)
     rspec (3.13.0)
       rspec-core (~> 3.13.0)
@@ -107,6 +109,7 @@ DEPENDENCIES
   lefthook (~> 1.7, >= 1.7.15)
   pry (~> 0.14.2)
   rake (~> 13.0)
+  rake-compiler (>= 1.2.7)
   rspec (~> 3.0)
   rubocop-rails_config (~> 1.16)
   wow_dbc!
