@@ -310,6 +310,40 @@ static VALUE dbc_update_record_multi(VALUE self, VALUE index, VALUE updates) {
     return Qnil;
 }
 
+static VALUE dbc_find_by(VALUE self, VALUE field, VALUE value) {
+    DBCFile *dbc;
+    TypedData_Get_Struct(self, DBCFile, &dbc_data_type, dbc);
+
+    long field_idx = -1;
+
+    // Find the index of the field name
+    for (long i = 0; i < RARRAY_LEN(dbc->field_names); i++) {
+        if (rb_eql(rb_ary_entry(dbc->field_names, i), field)) {
+            field_idx = i;
+            break;
+        }
+    }
+
+    if (field_idx < 0 || (uint32_t)field_idx >= dbc->header.field_count) {
+        rb_raise(rb_eArgError, "Invalid field name");
+    }
+
+    VALUE result = rb_ary_new();
+
+    for (uint32_t i = 0; i < dbc->header.record_count; i++) {
+        if (dbc->records[i][field_idx] == NUM2UINT(value)) {
+            VALUE record = rb_hash_new();
+            for (uint32_t j = 0; j < dbc->header.field_count; j++) {
+                VALUE field_name = rb_ary_entry(dbc->field_names, j);
+                rb_hash_aset(record, field_name, UINT2NUM(dbc->records[i][j]));
+            }
+            rb_ary_push(result, record);
+        }
+    }
+
+    return result;
+}
+
 void Init_wow_dbc(void) {
     rb_mWowDBC = rb_define_module("WowDBC");
     rb_cDBCFile = rb_define_class_under(rb_mWowDBC, "DBCFile", rb_cObject);
@@ -324,4 +358,5 @@ void Init_wow_dbc(void) {
     rb_define_method(rb_cDBCFile, "delete_record", dbc_delete_record, 1);
     rb_define_method(rb_cDBCFile, "get_record", dbc_get_record, 1);
     rb_define_method(rb_cDBCFile, "header", dbc_get_header, 0);
+    rb_define_method(rb_cDBCFile, "find_by", dbc_find_by, 2);
 }

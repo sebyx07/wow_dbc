@@ -36,51 +36,62 @@ Here's a quick example of how to use WowDBC:
 ```ruby
 require 'wow_dbc'
 
-# Define field names for your DBC file
-field_names = [:id, :name, :description, :icon, :category, :subcategory]
+# Correct field names for the Item.dbc file
+field_names = [:id, :class, :subclass, :sound_override_subclass, :material, :displayid, :inventory_type, :sheath_type]
 
-# Open a DBC file
-dbc = WowDBC::DBCFile.new('path/to/your/file.dbc', field_names)
+# Open the Item.dbc file
+dbc = WowDBC::DBCFile.new('path/to/your/Item.dbc', field_names)
 dbc.read
 
-# Read a record
-record = dbc.get_record(0)
-puts "First record: #{record}"
+# Find a specific item (e.g., Warglaive of Azzinoth, ID: 32837)
+warglaive = dbc.find_by(:id, 32837).first
+puts "Warglaive of Azzinoth: #{warglaive}"
 
-# Update a single field in a record
-dbc.update_record(0, :name, "New Name")
+# Update a single field of the Warglaive
+dbc.update_record(warglaive[:id], :sheath_type, 3)  # Assuming 3 represents a different sheath type
 
-# Update multiple fields in a record
-dbc.update_record_multi(0, { name: "Newer Name", category: 5, subcategory: 10 })
+# Update multiple fields of the Warglaive
+dbc.update_record_multi(warglaive[:id], { material: 5, inventory_type: 17 })  # Assuming 5 is a different material and 17 is Two-Hand
 
-# Create a new empty record
-new_record_index = dbc.create_record
-puts "New empty record index: #{new_record_index}"
+# Create a new empty item record
+new_item_index = dbc.create_record
+puts "New empty item index: #{new_item_index}"
 
-# Create a new record with initial values
-initial_values = { id: 1000, name: "New Item", category: 3, subcategory: 7 }
-new_record_with_values_index = dbc.create_record_with_values(initial_values)
-puts "New record with values index: #{new_record_with_values_index}"
+# Create a new item record with initial values
+initial_values = {
+  id: 99999,
+  class: 2,  # Weapon
+  subclass: 7,  # Warglaives
+  sound_override_subclass: -1,  # No override
+  material: warglaive[:material],
+  displayid: warglaive[:displayid],
+  inventory_type: 17,  # Two-Hand
+  sheath_type: 3
+}
+new_item_index = dbc.create_record_with_values(initial_values)
+puts "New custom item index: #{new_item_index}"
 
-# Read the newly created record
-new_record = dbc.get_record(new_record_with_values_index)
-puts "Newly created record: #{new_record}"
+# Read the newly created item
+new_item = dbc.get_record(new_item_index)
+puts "Newly created item: #{new_item}"
 
-# Delete a record
-dbc.delete_record(new_record_index)
+# Delete an item (be careful with this!)
+# dbc.delete_record(new_item_index)
 
 # Write changes back to the file
 dbc.write
 
 # Reading header information
 header = dbc.header
-puts "Total records: #{header[:record_count]}"
-puts "Fields per record: #{header[:field_count]}"
+puts "Total items: #{header[:record_count]}"
+puts "Fields per item: #{header[:field_count]}"
 
-# Iterating through all records
-(0...header[:record_count]).each do |i|
-  record = dbc.get_record(i)
-  puts "Record #{i}: #{record}"
+# Finding all two-handed weapons
+two_handed_weapons = dbc.find_by(:inventory_type, 17)  # 17 represents Two-Hand weapons
+
+puts "Two-handed weapons:"
+two_handed_weapons.each do |item|
+  puts "Item ID: #{item[:id]}, Class: #{item[:class]}, Subclass: #{item[:subclass]}, Display ID: #{item[:displayid]}"
 end
 ```
 

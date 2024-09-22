@@ -102,6 +102,30 @@ RSpec.describe WowDBC::DBCFile do
       expect(updated_record[:material]).to eq(9)
       expect(updated_record[:inventory_type]).to eq(10)
     end
+
+    it 'finds a record by id' do
+      results = dbc_file.find_by(:id, 32837)
+      expect(results).to be_an(Array)
+      expect(results.length).to eq(1)
+      binding.pry
+      expect(results.first[:id]).to eq(32837)
+    end
+
+    it 'returns an empty array when no matching records are found' do
+      results = dbc_file.find_by(:id, 999999)  # Assuming this ID doesn't exist
+      expect(results).to be_an(Array)
+      expect(results).to be_empty
+    end
+
+    it 'finds multiple records with the same value in a field' do
+      # Assuming there are multiple records with class 2
+      results = dbc_file.find_by(:class, 2)
+      expect(results).to be_an(Array)
+      expect(results.length).to be > 1
+      results.each do |record|
+        expect(record[:class]).to eq(2)
+      end
+    end
   end
 
   describe 'error handling' do
