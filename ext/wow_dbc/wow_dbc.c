@@ -344,6 +344,39 @@ static VALUE dbc_find_by(VALUE self, VALUE field, VALUE value) {
     return result;
 }
 
+static VALUE dbc_write_to(VALUE self, VALUE new_filepath) {
+    DBCFile *dbc;
+    TypedData_Get_Struct(self, DBCFile, &dbc_data_type, dbc);
+
+    Check_Type(new_filepath, T_STRING);
+    const char *path = StringValueCStr(new_filepath);
+
+    FILE *file = fopen(path, "wb");
+    if (!file) {
+        rb_raise(rb_eIOError, "Could not open file for writing: %s", path);
+    }
+
+    if (fwrite(&dbc->header, sizeof(DBCHeader), 1, file) != 1) {
+        fclose(file);
+        rb_raise(rb_eIOError, "Failed to write DBC header");
+    }
+
+    for (uint32_t i = 0; i < dbc->header.record_count; i++) {
+        if (fwrite(dbc->records[i], sizeof(uint32_t), dbc->header.field_count, file) != dbc->header.field_count) {
+            fclose(file);
+            rb_raise(rb_eIOError, "Failed to write DBC record");
+        }
+    }
+
+    if (fwrite(dbc->string_block, 1, dbc->header.string_block_size, file) != dbc->header.string_block_size) {
+        fclose(file);
+        rb_raise(rb_eIOError, "Failed to write DBC string block");
+    }
+
+    fclose(file);
+    return self;
+}
+
 void Init_wow_dbc(void) {
     rb_mWowDBC = rb_define_module("WowDBC");
     rb_cDBCFile = rb_define_class_under(rb_mWowDBC, "DBCFile", rb_cObject);
@@ -351,6 +384,7 @@ void Init_wow_dbc(void) {
     rb_define_method(rb_cDBCFile, "initialize", dbc_initialize, 2);
     rb_define_method(rb_cDBCFile, "read", dbc_read, 0);
     rb_define_method(rb_cDBCFile, "write", dbc_write, 0);
+    rb_define_method(rb_cDBCFile, "write_to", dbc_write_to, 1);
     rb_define_method(rb_cDBCFile, "create_record", dbc_create_record, 0);
     rb_define_method(rb_cDBCFile, "create_record_with_values", dbc_create_record_with_values, 1);
     rb_define_method(rb_cDBCFile, "update_record", dbc_update_record, 3);

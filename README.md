@@ -78,8 +78,11 @@ puts "Newly created item: #{new_item}"
 # Delete an item (be careful with this!)
 # dbc.delete_record(new_item_index)
 
-# Write changes back to the file
+# Write changes back to the same file(update)
 dbc.write
+
+# Write to a new file
+dbc.write_to('path/to/your/NewItem.dbc')
 
 # Reading header information
 header = dbc.header
@@ -89,7 +92,7 @@ puts "Fields per item: #{header[:field_count]}"
 # Finding all two-handed weapons
 two_handed_weapons = dbc.find_by(:inventory_type, 17)  # 17 represents Two-Hand weapons
 
-puts "Two-handed weapons:"
+puts 'Two-handed weapons:'
 two_handed_weapons.each do |item|
   puts "Item ID: #{item[:id]}, Class: #{item[:class]}, Subclass: #{item[:subclass]}, Display ID: #{item[:displayid]}"
 end

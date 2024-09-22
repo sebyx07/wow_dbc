@@ -5,6 +5,7 @@
 RSpec.describe WowDBC::DBCFile do
   let(:original_file) { File.join(File.dirname(__FILE__), 'resources', 'Item.dbc') }
   let(:test_file) { File.join(File.dirname(__FILE__), 'resources', 'Item_test.dbc') }
+  let(:new_file) { File.join(File.dirname(__FILE__), 'resources', 'Item_new.dbc') }
   let(:field_names) { [:id, :class, :subclass, :sound_override_subclass, :material, :displayid, :inventory_type, :sheath_type] }
 
   before(:each) do
@@ -13,6 +14,7 @@ RSpec.describe WowDBC::DBCFile do
 
   after(:each) do
     File.delete(test_file) if File.exist?(test_file)
+    File.delete(new_file) if File.exist?(new_file)
   end
 
   describe 'CRUD operations' do
@@ -107,7 +109,6 @@ RSpec.describe WowDBC::DBCFile do
       results = dbc_file.find_by(:id, 32837)
       expect(results).to be_an(Array)
       expect(results.length).to eq(1)
-      binding.pry
       expect(results.first[:id]).to eq(32837)
     end
 
@@ -125,6 +126,60 @@ RSpec.describe WowDBC::DBCFile do
       results.each do |record|
         expect(record[:class]).to eq(2)
       end
+    end
+  end
+
+  describe '#write_to' do
+    let(:dbc_file) { WowDBC::DBCFile.new(test_file, field_names) }
+
+    before(:each) do
+      dbc_file.read
+    end
+
+    it 'writes the DBC file to a new location' do
+      dbc_file.write_to(new_file)
+      expect(File.exist?(new_file)).to be true
+    end
+
+    it 'preserves the original file' do
+      original_content = File.read(test_file)
+      dbc_file.write_to(new_file)
+      expect(File.read(test_file)).to eq(original_content)
+    end
+
+    it 'writes a file with the same content as the original' do
+      dbc_file.write_to(new_file)
+      expect(FileUtils.compare_file(test_file, new_file)).to be true
+    end
+
+    it 'writes changes to the new file' do
+      new_value = 99999
+      dbc_file.update_record(0, :class, new_value)
+      dbc_file.write_to(new_file)
+
+      new_dbc_file = WowDBC::DBCFile.new(new_file, field_names)
+      new_dbc_file.read
+      expect(new_dbc_file.get_record(0)[:class]).to eq(new_value)
+
+      original_dbc_file = WowDBC::DBCFile.new(test_file, field_names)
+      original_dbc_file.read
+      expect(original_dbc_file.get_record(0)[:class]).not_to eq(new_value)
+    end
+
+    it 'raises an error when the new file path is invalid' do
+      invalid_path = '/invalid/path/file.dbc'
+      expect { dbc_file.write_to(invalid_path) }.to raise_error(IOError)
+    end
+
+    it 'overwrites an existing file at the new path' do
+      FileUtils.touch(new_file)
+      original_content = 'Original content'
+      File.write(new_file, original_content)
+
+      dbc_file.write_to(new_file)
+
+      expect(File.read(new_file)).not_to eq(original_content)
+      expect(FileUtils.compare_file(test_file, new_file)).to be true
     end
   end
 
